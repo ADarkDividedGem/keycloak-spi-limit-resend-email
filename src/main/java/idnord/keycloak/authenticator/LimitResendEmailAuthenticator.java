@@ -8,8 +8,9 @@ import org.keycloak.authentication.Authenticator;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
-import org.keycloak.services.messages.Messages;
 
+import static idnord.keycloak.LimitResendEmailCore.FORM_ATTR_RETRIES_LEFT;
+import static idnord.keycloak.LimitResendEmailCore.MESSAGE_KEY_TOO_MANY_REQUESTS;
 import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_MAX_RETRIES;
 import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC;
 
@@ -20,13 +21,19 @@ public class LimitResendEmailAuthenticator implements Authenticator {
     public void authenticate(AuthenticationFlowContext context) {
         UserModel user = context.getUser();
 
-        if (LimitResendEmailCore.isLimitResendEmailReached(user, LIMIT_RESEND_EMAIL_MAX_RETRIES, LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC)) {
-            log.info("Email sending limited for username={}, clientId={}, IP={}.",
-                    user.getUsername(), context.getAuthenticationSession().getClient().getClientId(), context.getSession().getContext().getConnection().getRemoteAddr());
+        LimitResendEmailCore.Status status = LimitResendEmailCore.getStatus(user, LIMIT_RESEND_EMAIL_MAX_RETRIES, LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC);
+        if (status.blocked()) {
+            int minutesLeft = (int) Math.ceil(status.secondsUntilUnblocked() / 60.0);
+
+            log.info("Email sending limited for username={}, clientId={}, IP={}, secondsUntilUnblocked={}.",
+                    user.getUsername(), context.getAuthenticationSession().getClient().getClientId(), context.getSession().getContext().getConnection().getRemoteAddr(), status.secondsUntilUnblocked());
 
             context.challenge(
                     context.form()
-                            .setError(user.isEmailVerified() ? Messages.EMAIL_SENT_ERROR : Messages.VERIFY_EMAIL)
+                            .setAttribute(FORM_ATTR_RETRIES_LEFT, status.retriesLeft())
+                            .setAttribute("secondsUntilUnblocked", status.secondsUntilUnblocked())
+                            .setAttribute("minutesUntilUnblocked", minutesLeft)
+                            .setError(MESSAGE_KEY_TOO_MANY_REQUESTS, minutesLeft)
                             .createErrorPage(Response.Status.TOO_MANY_REQUESTS)
             );
 
@@ -57,4 +64,3 @@ public class LimitResendEmailAuthenticator implements Authenticator {
     public void close() {
     }
 }
-
