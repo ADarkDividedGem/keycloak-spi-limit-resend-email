@@ -267,6 +267,71 @@ Click to Watch demo video ^
 
 ---
 
+## 🎨 Fork additions — template (FTL) integration
+
+This fork ([ADarkDividedGem/keycloak-spi-limit-resend-email](https://github.com/ADarkDividedGem/keycloak-spi-limit-resend-email)) adds two enhancements on top of upstream:
+
+1. **Per-realm configuration overrides** — see [Overriding per realm without restarting Keycloak](#overriding-per-realm-without-restarting-keycloak) above.
+2. **Retries-left and block-countdown exposed to the login theme** — so that custom FreeMarker (`.ftl`) templates can show the user *how many attempts they have left* and *how long until the block is lifted*, instead of only a generic error.
+
+### Form attributes available in `.ftl` templates
+
+When the SPI renders the verify-email page or the "too many requests" error page, it sets the following attributes on the Keycloak `LoginFormsProvider`. They are accessible in any custom theme's `.ftl` templates (e.g. `login-verify-email.ftl`, `error.ftl`).
+
+| Attribute                | Type    | Where set                                                               | Meaning                                                                                                   |
+|--------------------------|---------|-------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `retriesLeft`            | `int`   | Verify-email page **and** the 429 error page (authenticator + required action) | Resend attempts remaining before the block kicks in. On the blocked page this is `0`.                     |
+| `secondsUntilUnblocked`  | `int`   | 429 error page only (when blocked)                                      | Raw seconds remaining until the user can trigger another email.                                           |
+| `minutesUntilUnblocked`  | `int`   | 429 error page only (when blocked)                                      | `secondsUntilUnblocked` rounded **up** to the nearest minute — convenient for user-facing messages.       |
+
+### Localized message key
+
+A new message key is registered by the SPI via `theme-resources/messages/messages_en.properties`:
+
+| Key                                      | Default English value                                                            |
+|------------------------------------------|----------------------------------------------------------------------------------|
+| `limitResendEmailTooManyRequestsError`   | `Too many email attempts. Please wait {0} minute(s) before trying again.`        |
+
+The `{0}` placeholder is substituted with `minutesUntilUnblocked`. Custom themes can override this key in their own `messages_<locale>.properties` to translate or reword the message.
+
+### Example FTL usage
+
+Showing the remaining attempts on the verify-email page (e.g. in `login-verify-email.ftl`):
+
+```ftl
+<#if retriesLeft?? && (retriesLeft > 0)>
+  <p class="instruction">
+    You have <strong>${retriesLeft}</strong> resend attempt(s) remaining
+    before sending is temporarily blocked.
+  </p>
+</#if>
+```
+
+Showing a friendly countdown on the blocked error page (e.g. in `error.ftl`):
+
+```ftl
+<#if minutesUntilUnblocked??>
+  <p>
+    Please try again in approximately
+    <strong>${minutesUntilUnblocked}</strong> minute(s).
+  </p>
+</#if>
+```
+
+Because `retriesLeft` is set on the verify-email page too, you can optionally degrade the message as the user approaches the limit:
+
+```ftl
+<#if retriesLeft?? && (retriesLeft <= 1)>
+  <p class="kc-feedback-text warning">
+    This is your last resend attempt before emails are blocked for a period of time.
+  </p>
+</#if>
+```
+
+> ℹ️ The SPI uses `setError("limitResendEmailTooManyRequestsError", minutesUntilUnblocked)` on the blocked page, so the default Keycloak `${message.summary}` rendering in `error.ftl` will already show the localized text — you only need to reach for the raw attributes above if you want richer, custom markup.
+
+---
+
 # Keycloak Custom SPI Extensions
 
 This repository contains custom [Keycloak](https://www.keycloak.org/) Service Provider Interfaces (SPI) for:
