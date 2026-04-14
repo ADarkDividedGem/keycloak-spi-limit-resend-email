@@ -1,6 +1,7 @@
 package idnord.keycloak.authenticator;
 
 import idnord.keycloak.LimitResendEmailCore;
+import idnord.keycloak.config.LimitResendEmailConfiguration;
 import jakarta.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.keycloak.authentication.AuthenticationFlowContext;
@@ -11,8 +12,6 @@ import org.keycloak.models.UserModel;
 
 import static idnord.keycloak.LimitResendEmailCore.FORM_ATTR_RETRIES_LEFT;
 import static idnord.keycloak.LimitResendEmailCore.MESSAGE_KEY_TOO_MANY_REQUESTS;
-import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_MAX_RETRIES;
-import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC;
 
 @Slf4j
 public class LimitResendEmailAuthenticator implements Authenticator {
@@ -21,7 +20,8 @@ public class LimitResendEmailAuthenticator implements Authenticator {
     public void authenticate(AuthenticationFlowContext context) {
         UserModel user = context.getUser();
 
-        LimitResendEmailCore.Status status = LimitResendEmailCore.getStatus(user, LIMIT_RESEND_EMAIL_MAX_RETRIES, LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC);
+        LimitResendEmailConfiguration.Values cfg = LimitResendEmailConfiguration.resolve(context.getRealm());
+        LimitResendEmailCore.Status status = LimitResendEmailCore.getStatus(user, cfg.maxRetries(), cfg.retryBlockDurationInSec());
         if (status.blocked()) {
             int minutesLeft = (int) Math.ceil(status.secondsUntilUnblocked() / 60.0);
 

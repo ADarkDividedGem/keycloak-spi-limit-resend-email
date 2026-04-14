@@ -9,8 +9,10 @@ import org.keycloak.events.EventListenerProviderFactory;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 
-import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_MAX_RETRIES;
-import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC;
+import static idnord.keycloak.config.LimitResendEmailConfiguration.DEFAULT_MAX_RETRIES;
+import static idnord.keycloak.config.LimitResendEmailConfiguration.DEFAULT_RETRY_BLOCK_DURATION_IN_SEC;
+import static idnord.keycloak.config.LimitResendEmailConfiguration.REALM_ATTR_MAX_RETRIES;
+import static idnord.keycloak.config.LimitResendEmailConfiguration.REALM_ATTR_RETRY_BLOCK_DURATION_IN_SEC;
 
 @AutoService(EventListenerProviderFactory.class)
 @Slf4j
@@ -28,8 +30,8 @@ public class LimitResendEmailLastTimeAndCountListenerFactory implements EventLis
 
     @Override
     public void init(Config.Scope config) {
-        log.info("config loaded: KEYCLOAK_LIMIT_RESEND_EMAIL_MAX_RETRIES={}, KEYCLOAK_LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC={}",
-                LIMIT_RESEND_EMAIL_MAX_RETRIES, LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC);
+        log.info("config defaults loaded: maxRetries={} (realm attr '{}' overrides), retryBlockDurationInSec={} (realm attr '{}' overrides)",
+                DEFAULT_MAX_RETRIES, REALM_ATTR_MAX_RETRIES, DEFAULT_RETRY_BLOCK_DURATION_IN_SEC, REALM_ATTR_RETRY_BLOCK_DURATION_IN_SEC);
         attributeNameForTime = config.get("attribute-name-for-time", LimitResendEmailCore.ATTR_FOR_LIMIT_RESEND_EMAIL_LAST_TIME);
         attributeNameForCount = config.get("attribute-name-for-count", LimitResendEmailCore.ATTR_FOR_LIMIT_RESEND_EMAIL_COUNT);
     }

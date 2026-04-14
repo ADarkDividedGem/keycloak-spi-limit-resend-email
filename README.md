@@ -29,6 +29,43 @@ KEYCLOAK_LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC=3600
 |------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|
 | `KEYCLOAK_LIMIT_RESEND_EMAIL_MAX_RETRIES`                 | Maximum number of attempts to send verification or reset password emails without delay. After reaching this limit, email sending will be temporarily blocked until the user verifies their email or resets the password. | `3`           |
 | `KEYCLOAK_LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC` | Duration (in seconds) of the block after exceeding the retry limit. After this period, the user may send one more email before being blocked again, unless they verify or reset their password.               | `3600`        |
+
+#### Overriding per realm without restarting Keycloak
+Both settings can be overridden per realm via **realm attributes**, which take effect immediately (no restart, no rebuild). The env-var values act as the fallback/default when a realm attribute is not set.
+
+| Realm Attribute                           | Overrides                                                 |
+|-------------------------------------------|-----------------------------------------------------------|
+| `limitResendEmail.maxRetries`             | `KEYCLOAK_LIMIT_RESEND_EMAIL_MAX_RETRIES`                 |
+| `limitResendEmail.retryBlockDurationInSec`| `KEYCLOAK_LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC` |
+
+Resolution order: **realm attribute → env var → built-in default (`3` / `3600`)**.
+
+Set via Admin REST API:
+```bash
+curl -X PUT "$KC_URL/admin/realms/$REALM" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"attributes":{"limitResendEmail.maxRetries":"5","limitResendEmail.retryBlockDurationInSec":"1800"}}'
+```
+
+Or via `kcadm.sh` / `kcadm.bat`:
+```bash
+kcadm.sh update realms/$REALM \
+  -s 'attributes."limitResendEmail.maxRetries"=5' \
+  -s 'attributes."limitResendEmail.retryBlockDurationInSec"=1800'
+```
+
+Or via Terraform:
+```terraform
+resource "keycloak_realm" "realm" {
+  # ...
+  attributes = {
+    "limitResendEmail.maxRetries"              = "5"
+    "limitResendEmail.retryBlockDurationInSec" = "1800"
+  }
+}
+```
+
 ### 5. Restart Keycloak
 ### 6. Configure Realm
 #### 6.1 Open master realm and check that "Provider info" contains

@@ -2,6 +2,7 @@ package idnord.keycloak.requiredaction;
 
 import com.google.auto.service.AutoService;
 import idnord.keycloak.LimitResendEmailCore;
+import idnord.keycloak.config.LimitResendEmailConfiguration;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriBuilderException;
@@ -34,8 +35,6 @@ import java.util.concurrent.TimeUnit;
 
 import static idnord.keycloak.LimitResendEmailCore.FORM_ATTR_RETRIES_LEFT;
 import static idnord.keycloak.LimitResendEmailCore.MESSAGE_KEY_TOO_MANY_REQUESTS;
-import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_MAX_RETRIES;
-import static idnord.keycloak.config.LimitResendEmailConfiguration.LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC;
 
 @Slf4j
 @AutoService(RequiredActionFactory.class)
@@ -74,10 +73,11 @@ public class CustomVerifyEmail extends VerifyEmail implements RequiredActionProv
 
     private void handle(RequiredActionContext context) {
         UserModel user = context.getUser();
+        LimitResendEmailConfiguration.Values cfg = LimitResendEmailConfiguration.resolve(context.getRealm());
         LimitResendEmailCore.Status status = LimitResendEmailCore.getStatus(
                 user,
-                LIMIT_RESEND_EMAIL_MAX_RETRIES,
-                LIMIT_RESEND_EMAIL_RETRY_BLOCK_DURATION_IN_SEC
+                cfg.maxRetries(),
+                cfg.retryBlockDurationInSec()
         );
 
         if (status.blocked()) {
