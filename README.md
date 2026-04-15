@@ -278,11 +278,11 @@ This fork ([ADarkDividedGem/keycloak-spi-limit-resend-email](https://github.com/
 
 When the SPI renders the verify-email page or the "too many requests" error page, it sets the following attributes on the Keycloak `LoginFormsProvider`. They are accessible in any custom theme's `.ftl` templates (e.g. `login-verify-email.ftl`, `error.ftl`).
 
-| Attribute                | Type    | Where set                                                               | Meaning                                                                                                   |
-|--------------------------|---------|-------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| `retriesLeft`            | `int`   | Verify-email page **and** the 429 error page (authenticator + required action) | Resend attempts remaining before the block kicks in. On the blocked page this is `0`.                     |
-| `secondsUntilUnblocked`  | `int`   | 429 error page only (when blocked)                                      | Raw seconds remaining until the user can trigger another email.                                           |
-| `minutesUntilUnblocked`  | `int`   | 429 error page only (when blocked)                                      | `secondsUntilUnblocked` rounded **up** to the nearest minute — convenient for user-facing messages.       |
+| Attribute                | Type    | Where set                                                                                                  | Meaning                                                                                                   |
+|--------------------------|---------|------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `retriesLeft`            | `int`   | Verify-email page **and** the 429 error page (authenticator + required action)                             | Resend attempts remaining before the block kicks in. On the blocked page this is `0`.                     |
+| `secondsUntilUnblocked`  | `int`   | 429 error page (when blocked) **and** the verify-email page when the final retry has just been exhausted   | Raw seconds remaining until the user can trigger another email.                                           |
+| `minutesUntilUnblocked`  | `int`   | 429 error page (when blocked) **and** the verify-email page when the final retry has just been exhausted   | `secondsUntilUnblocked` rounded **up** to the nearest minute — convenient for user-facing messages.       |
 
 ### Localized message key
 
@@ -328,6 +328,21 @@ Because `retriesLeft` is set on the verify-email page too, you can optionally de
 </#if>
 ```
 
+When the user has just exhausted their final retry, the verify-email page also exposes `secondsUntilUnblocked` / `minutesUntilUnblocked`, so the template can hide the resend link and render a countdown instead:
+
+```ftl
+<#if retriesLeft?? && retriesLeft == 0 && secondsUntilUnblocked??>
+  <p class="instruction" data-seconds-until-unblocked="${secondsUntilUnblocked}">
+    Please wait <strong>${minutesUntilUnblocked}</strong> minute(s)
+    before requesting another email.
+  </p>
+<#else>
+  <!-- existing resend link -->
+</#if>
+```
+
+A bit of JavaScript can then tick `data-seconds-until-unblocked` down to zero and re-enable the resend link client-side.
+
 > ℹ️ The SPI uses `setError("limitResendEmailTooManyRequestsError", minutesUntilUnblocked)` on the blocked page, so the default Keycloak `${message.summary}` rendering in `error.ftl` will already show the localized text — you only need to reach for the raw attributes above if you want richer, custom markup.
 
 ---
@@ -355,6 +370,7 @@ Spin up local keycloak
 Build the JAR
 ```bash
 mvn clean package
+mvn clean package -DskipTests
 ```
 Ensure JAR includes necessary META-INF services
 ```bash

@@ -21,6 +21,7 @@ import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
+import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -111,17 +112,20 @@ public class CustomVerifyEmail extends VerifyEmail implements RequiredActionProv
         // The listener increments the count once SEND_VERIFY_EMAIL fires, so display the
         // post-send value ("N attempts remaining before sending is temporarily blocked").
         int retriesLeftAfterSend = Math.max(0, status.retriesLeft() - 1);
+        // When this send exhausts the final retry, expose the block countdown so the template
+        // can hide the resend link and show a timer. The block starts at the moment of this send.
+        int secondsUntilUnblockedAfterSend = retriesLeftAfterSend == 0 ? cfg.retryBlockDurationInSec() : 0;
 
         EventBuilder event = context.getEvent().clone()
                 .event(EventType.SEND_VERIFY_EMAIL)
                 .detail(Details.EMAIL, email);
 
-        context.challenge(sendVerifyEmail(context, event, retriesLeftAfterSend));
+        context.challenge(sendVerifyEmail(context, event, retriesLeftAfterSend, secondsUntilUnblockedAfterSend));
     }
 
     // Inlined from VerifyEmail#sendVerifyEmail (made private in Keycloak 26.5.4) so we can inject
     // the retriesLeft form attribute into the rendered response.
-    private Response sendVerifyEmail(RequiredActionContext context, EventBuilder event, int retriesLeftAfterSend)
+    private Response sendVerifyEmail(RequiredActionContext context, EventBuilder event, int retriesLeftAfterSend, int secondsUntilUnblockedAfterSend)
             throws UriBuilderException, IllegalArgumentException {
         RealmModel realm = context.getRealm();
         UriInfo uriInfo = context.getUriInfo();
@@ -148,9 +152,14 @@ public class CustomVerifyEmail extends VerifyEmail implements RequiredActionProv
                     .sendVerifyEmail(link, expirationInMinutes);
             event.success();
 
-            return context.form()
-                    .setAttribute(FORM_ATTR_RETRIES_LEFT, retriesLeftAfterSend)
-                    .createResponse(UserModel.RequiredAction.VERIFY_EMAIL);
+            LoginFormsProvider form = context.form()
+                    .setAttribute(FORM_ATTR_RETRIES_LEFT, retriesLeftAfterSend);
+            if (secondsUntilUnblockedAfterSend > 0) {
+                int minutesUntilUnblocked = (int) Math.ceil(secondsUntilUnblockedAfterSend / 60.0);
+                form.setAttribute("secondsUntilUnblocked", secondsUntilUnblockedAfterSend)
+                        .setAttribute("minutesUntilUnblocked", minutesUntilUnblocked);
+            }
+            return form.createResponse(UserModel.RequiredAction.VERIFY_EMAIL);
         } catch (EmailException e) {
             event.clone().event(EventType.SEND_VERIFY_EMAIL)
                     .detail(Details.REASON, e.getMessage())
